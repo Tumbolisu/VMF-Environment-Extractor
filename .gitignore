@@ -37,3 +37,6 @@
 # Test Files
 *.vmf
 *.vmx
+
+# Release Files
+*.zip
