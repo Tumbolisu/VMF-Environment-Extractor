@@ -8,7 +8,7 @@ So far, this has only been tested for Team Fortress 2 maps.
 
 Click on "Releases" at the right side of the page and download the newest `ZIP` file. (Don't download the source code!) Extract the contents of the `ZIP` before trying to run the program.
 
-Drag and drop a `VMF` file onto `#TODO.exe`. You should see a new `VMF` file with the same name but ending with `.env.vmf`. This new `VMF` file will only include the entities and settings that control the environment of the map.
+Drag and drop a `VMF` file onto `_run_program.bat` if you are on Windows. On other platforms, use `src/main.exe` directly. You should see a new `VMF` file with the same name but ending with `.env.vmf`. This new `VMF` file will only include the entities and settings that control the environment of the map.
 
 ### I Got An Error Message!
 
