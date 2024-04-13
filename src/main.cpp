@@ -116,26 +116,6 @@ int main(int argc, char* argv[])
 						{
 							origin_kv->val = ent_map[classname].to_string();
 							ent_map[classname].z += 16.0f;
-/*
-							if (classname == "color_correction")
-								origin_kv->val = "40 0 16";
-							else if (classname == "env_fog_controller")
-								origin_kv->val = "-8 0 16";
-							else if (classname == "env_soundscape")
-								origin_kv->val = "32 -16 16";
-							else if (classname == "env_tonemap_controller")
-								origin_kv->val = "8 0 16";
-							else if (classname == "light_environment")
-								origin_kv->val = "-40 0 16";
-							else if (classname == "logic_auto")
-								origin_kv->val = "24 0 16";
-							else if (classname == "shadow_control")
-								origin_kv->val = "-24 0 16";
-							else if (classname == "sky_camera")
-								origin_kv->val = "0 -16 16";
-							else
-								origin_kv->val = "0 0 0";
-*/
 						}
 					}
 					else
