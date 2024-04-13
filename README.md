@@ -18,4 +18,4 @@ If something goes wrong, an error message should appear. Make sure you extracted
 
 Written in C++. No dependencies. Only tested on Windows, but should run on any operating system.
 
-There are Windows BAT files in the `src` folder to speed up building and debugging the project. To build it yourself on Windows, double-click `.build_project.bat` inside the `src` folder. On other operating systems, you should be able to just run `make` in a terminal while inside the `src` folder.
+There are several Windows BAT files to speed up building and debugging the project. To build it yourself on Windows, simply double-click `_build_project.bat`. On other operating systems, you should be able to just run `make` in a terminal while inside the project's root folder.
