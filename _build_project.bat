@@ -1,6 +1,7 @@
 @echo off
 echo [BAT] Building Program...
 make  ||  goto :errormake
+echo [BAT] Finished without errors.
 PAUSE
 exit
 

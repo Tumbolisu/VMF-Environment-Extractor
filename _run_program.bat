@@ -1,6 +1,7 @@
 @echo off
 echo [BAT] Running Program...
 bin\main.exe %*  ||  goto :errorexe
+echo [BAT] Finished without errors.
 PAUSE
 exit
 

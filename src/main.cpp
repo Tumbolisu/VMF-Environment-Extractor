@@ -5,33 +5,8 @@
 #include <sstream>
 #include <map>
 
-// This stuff is only used for printing error messages.
-#ifdef __GNUG__
-#include <cstdlib>
-#include <memory>
-#include <cxxabi.h>
-std::string demangle(const char * name)
-{
-	int status = -4;
-	std::unique_ptr<char, void(*)(void*)> res {abi::__cxa_demangle(name, NULL, NULL, &status), std::free};
-	return (status == 0) ? res.get() : name;
-}
-#else
-// does nothing if not g++
-std::string demangle(const char * name)
-{
-	return name;
-}
-#endif
-
-template <class T>
-inline std::string type(const T & t)
-{
-	return demangle(typeid(t).name());
-}
-
-
 #include "vdf.hpp"
+#include "utility.hpp"
 
 
 int main(int argc, char* argv[])
@@ -42,17 +17,23 @@ int main(int argc, char* argv[])
 	try
 	{
 		if (argc <= 1)
-			throw "No input!";
+		{ throw "No input!"; }
 
 		vector<string> filepaths;
 		filepaths.reserve(argc-1);
 
 		for (int i = 1; i < argc; ++i)
-			filepaths.push_back(argv[i]);
+		{ filepaths.push_back(argv[i]); }
 
 		for (string filepath : filepaths)
 		{
 			cout << "Processing \"" << filepath << "\"" << endl;
+
+			if (!string_ends_with(filepath, ".vmf"))
+			{
+				cout << "WARNING: File name does not end with \".vmf\"! Skipping." << endl;
+				continue;
+			}
 
 			cout << "Reading File..." << endl;
 			VDF vmf = VDF::parse_from_filepath(filepath);
@@ -84,59 +65,75 @@ int main(int argc, char* argv[])
 				{"sky_camera",             {  0,-16, 16} },
 			};
 
+			// List of references to all entities that we are keeping in the VMF.
+			vector<shared_ptr<VDF>> kept_entities;
+
 			// Search for relevant entities and the world properties. Delete everything else.
-			for (VDF::KeyValue & kv : vmf)
+			for (VDF::KeyValue & vmf_kv : vmf)
 			{
-				if (kv.key == "entity")
+				if (vmf_kv.key == "entity")
 				{
 					bool keep_entity = false;
 					VDF::KeyValue * origin_kv = nullptr;
 					string classname;
 
-					VDF & entity = *get<shared_ptr<VDF>>(kv.val);
-					for (VDF::KeyValue & kv : entity)
+					auto entity_ptr = get<shared_ptr<VDF>>(vmf_kv.val);
+					VDF & entity = *entity_ptr;
+
+					for (VDF::KeyValue & ent_kv : entity)
 					{
-						if (kv.key == "classname")
+						if (ent_kv.key == "classname")
 						{
-							classname = get<string>(kv.val);
-							if (ent_map.find(classname) != ent_map.end())
-							{
-								keep_entity = true;
-							}
+							classname = get<string>(ent_kv.val);
+							if (contains(ent_map, classname))
+							{ keep_entity = true; }
 						}
-						else if (kv.key == "origin")
+						else if (ent_kv.key == "origin")
 						{
-							origin_kv = &kv;
+							origin_kv = &ent_kv;
 						}
 					}
 
 					if (keep_entity)
 					{
-						if (origin_kv != nullptr)
+						bool entity_is_not_new = false;
+						for (const auto & ent : kept_entities)
 						{
-							origin_kv->val = ent_map[classname].to_string();
-							ent_map[classname].z += 16.0f;
+							// "classname" is included in the ignore list because it's identical anyway.
+							if (VDF::compare(entity, *ent, {"id", "origin", "classname", "editor"}, true))
+							{ entity_is_not_new = true; }
+						}
+						if (entity_is_not_new)
+						{
+							vmf_kv.clear();
+						}
+						else
+						{
+							kept_entities.push_back(entity_ptr);
+							if (origin_kv != nullptr)
+							{
+								origin_kv->val = ent_map[classname].to_string();
+								ent_map[classname].z += 16.0f;
+							}
 						}
 					}
 					else
 					{
-						kv = VDF::KeyValue(); // delete entry
+						vmf_kv.clear();
 					}
 				}
-				else if (kv.key == "world")
+				else if (vmf_kv.key == "world")
 				{
-					VDF & world = *get<shared_ptr<VDF>>(kv.val);
-					for (VDF::KeyValue & kv : world)
+					VDF & world = *get<shared_ptr<VDF>>(vmf_kv.val);
+					for (VDF::KeyValue & world_kv : world)
 					{
-						if (kv.key == "solid")
-						{
-							kv = VDF::KeyValue(); // delete entry
-						}
+						if (world_kv.key == "solid")
+						{ world_kv.clear(); }
 					}
 				}
 				else
 				{
-					kv = VDF::KeyValue(); // delete entry
+					vmf_kv.clear();
 				}
 			}
 

@@ -3,6 +3,7 @@ echo [BAT] Removing Old Files...
 make clean  ||  goto :errorclean
 echo [BAT] Building Program...
 make        ||  goto :errormake
+echo [BAT] Finished without errors.
 PAUSE
 exit
 

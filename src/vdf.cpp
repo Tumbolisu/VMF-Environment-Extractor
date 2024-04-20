@@ -5,50 +5,27 @@
 #include <sstream>
 #include <utility>
 
-
-// Performs a linear search on a string to find an ASCII whitespace character.
-// Returns the position of the first whitespace character if one exists,
-// returns `std::string::npos` otherwise.
-// The ASCII whitespace characters are `'\\t'`, `'\\n'`, `'\\v'`, `'\\f'`, `'\\r'` and `' '`.
-std::size_t find_whitespace(const std::string & s)
-{
-	using namespace std;
-	for (size_t i = 0; i < s.size(); ++i)
-		if ((s[i] >= '\t' && s[i] <= '\r') || (s[i] == ' '))
-			return i;
-	return string::npos;
-}
-
-// Performs a linear search on a string to find an ASCII whitespace character.
-// Returns `true` if a whitespace character exists,
-// returns `false` otherwise.
-// The ASCII whitespace characters are `'\\t'`, `'\\n'`, `'\\v'`, `'\\f'`, `'\\r'` and `' '`.
-bool has_whitespace(const std::string & s)
-{
-	using namespace std;
-	for (char c : s)
-		if ((c >= '\t' && c <= '\r') || (c == ' '))
-			return true;
-	return false;
-}
+#include "utility.hpp"
 
 
 //// VDF::KeyValue ////
 
 
-VDF::KeyValue::KeyValue(const std::string & key, const std::shared_ptr<VDF> & val)
-: key(key)
-, val(val)
-{}
+[[nodiscard]] bool VDF::KeyValue::empty() const noexcept
+{
+	return (key.empty())
+	&&     (std::holds_alternative<std::string>(val))
+	&&     (std::get<std::string>(val).empty());
+}
+
+void VDF::KeyValue::clear() noexcept
+{
+	key.clear();
+	val = "";
+}
 
 
-VDF::KeyValue::KeyValue(const std::string & key, const std::string & val)
-: key(key)
-, val(val)
-{}
-
-
-std::ostream & operator <<(std::ostream & os, const VDF::KeyValue & kv)
+std::ostream & operator<<(std::ostream & os, const VDF::KeyValue & kv)
 {
 	using namespace std;
 	os << "KV(\"" << kv.key << "\",";
@@ -67,7 +44,7 @@ std::ostream & operator <<(std::ostream & os, const VDF::KeyValue & kv)
 //// VDF::Token ////
 
 
-std::ostream & operator <<(std::ostream & os, const VDF::Token & t)
+std::ostream & operator<<(std::ostream & os, const VDF::Token & t)
 {
 	using namespace std;
 	switch (t.type)
@@ -93,11 +70,126 @@ std::ostream & operator <<(std::ostream & os, const VDF::Token & t)
 
 //// VDF ////
 
+std::vector<VDF::KeyValue *> VDF::find_all(const std::string & key)
+{
+	using namespace std;
+	std::vector<VDF::KeyValue *> result;
+	for (KeyValue & kv : data)
+	{
+		if (kv.key == key)
+		{ result.push_back(&kv); }
+	}
+	return result;
+}
 
-VDF::VDF(const std::vector<KeyValue> & data)
-: data(data)
-{}
+const std::vector<const VDF::KeyValue *> VDF::find_all(const std::string & key) const
+{
+	using namespace std;
+	std::vector<const VDF::KeyValue *> result;
+	for (const KeyValue & kv : data)
+	{
+		if (kv.key == key)
+		{ result.push_back(&kv); }
+	}
+	return result;
+}
 
+[[nodiscard]] bool VDF::compare(
+		const VDF & a,
+		const VDF & b,
+		const std::unordered_set<std::string> & ignore_keys,
+		bool ignore_order) noexcept
+{
+	using namespace std;
+
+	if (ignore_order)
+	{
+		// Loop through every KeyValue in `a` and try to pair it up with a KeyValue in `b`.
+		// If a matching KeyValue can't be found, or if something is left unpaired from `b`, then the VDFs aren't equal.
+
+		enum class State {Unpaired, PairedUp, Ignored};
+		vector<State> states_a (a.data.size(), State::Unpaired);
+		vector<State> states_b (b.data.size(), State::Unpaired);
+
+		// First mark all ignored KeyValues.
+
+		for (size_t i = 0; i < a.data.size(); ++i)
+		{
+			if (contains(ignore_keys, a.data[i].key))
+			{ states_a[i] = State::Ignored; }
+		}
+
+		for (size_t i = 0; i < b.data.size(); ++i)
+		{
+			if (contains(ignore_keys, b.data[i].key))
+			{ states_b[i] = State::Ignored; }
+		}
+
+		// Now do the actual pair-matching.
+
+		for (size_t ia = 0; ia < a.data.size(); ++ia)
+		{
+			const auto & key_a = a.data[ia].key;
+			const auto & val_a = a.data[ia].val;
+			auto & state_a = states_a[ia];
+
+			if (state_a == State::Ignored)
+			{ continue; }
+
+			// assert: state_a == State::Unpaired
+
+			for (size_t ib = 0; ib < b.data.size(); ++ib)
+			{
+				const auto & key_b = b.data[ib].key;
+				const auto & val_b = b.data[ib].val;
+				auto & state_b = states_b[ib];
+
+				if (state_b == State::Ignored
+				||  state_b == State::PairedUp)
+				{ continue; }
+
+				if (key_a != key_b)
+				{ continue; }
+
+				if (holds_alternative<string>(val_a))
+				{
+					if (holds_alternative<string>(val_b)
+					&&  get<string>(val_a) == get<string>(val_b))
+					{
+						state_a = state_b = State::PairedUp;
+						break;
+					}
+				}
+				else
+				{
+					if (holds_alternative<shared_ptr<VDF>>(val_b)
+					&&  compare(*get<shared_ptr<VDF>>(val_a), *get<shared_ptr<VDF>>(val_b), ignore_keys, ignore_order))
+					{
+						state_a = state_b = State::PairedUp;
+						break;
+					}
+				}
+			}
+
+			if (state_a == State::Unpaired)
+			{ return false; }
+		}
+
+		for (const auto & s : states_b)
+		{
+			if (s == State::Unpaired)
+			{ return false; }
+		}
+
+		return true;
+	}
+	else
+	{
+		// TODO: make this
+		throw "VDF::compare() with ignore_order = false is not yet implemented!";
+		return false;
+	}
+}
 
 
 std::vector<VDF::Token> VDF::tokenize(const std::string & vdfstring)
@@ -138,7 +230,7 @@ std::vector<VDF::Token> VDF::tokenize(const std::string & vdfstring)
 		{
 			brace_depth -= 1;
 			if (brace_depth < 0)
-				throw_error("Negative brace depth! (There are more closing braces than opening braces.)");
+			{ throw_error("Negative brace depth! (There are more closing braces than opening braces.)"); }
 			tokens.push_back(Token{Token::CloseBrace, brace_depth});
 			i += 1;
 			break;
@@ -147,7 +239,7 @@ std::vector<VDF::Token> VDF::tokenize(const std::string & vdfstring)
 		{
 			j = vdfstring.find('"', i+1);
 			if (j == vdfstring.npos)
-				throw_error("String without closing quote!");
+			{ throw_error("String without closing quote!"); }
 			tokens.push_back(Token{Token::String, vdfstring.substr(i+1, j-i-1)});
 			i = j+1;
 			break;
@@ -197,7 +289,7 @@ std::vector<VDF::Token> VDF::tokenize(const std::string & vdfstring)
 	}
 
 	if (brace_depth > 0)
-		throw_error("Positive brace depth! (There are more opening braces than closing braces.)");
+	{ throw_error("Positive brace depth! (There are more opening braces than closing braces.)"); }
 
 	tokens.push_back(Token{Token::End, -1});
 
@@ -238,7 +330,7 @@ VDF VDF::parse_tokens(const std::vector<VDF::Token> & tokens, int depth)
 			{
 				k += 1;
 				if (k >= tokens.size())
-					throw_error("Key string can't pair with a value because there are no more tokens to parse.");
+				{ throw_error("Key string can't pair with a value because there are no more tokens to parse."); }
 				next_token = tokens[k];
 			}
 			while (next_token.type == VDF::Token::Comment);
@@ -276,7 +368,7 @@ VDF VDF::parse_tokens(const std::vector<VDF::Token> & tokens, int depth)
 				}
 
 				if (!found)
-					throw_error("Opening brace without matching closing brace. (This should have been caught by the tokenizer!)");
+				{ throw_error("Opening brace without matching closing brace. (This should have been caught by the tokenizer!)"); }
 
 				braced_tokens.push_back(Token{Token::End, -1});
 
@@ -327,17 +419,21 @@ std::string VDF::serialize(int depth)
 	{
 		if (holds_alternative<string>(kv.val))
 		{
-			if (kv.key == "" && get<string>(kv.val) == "")
-				continue; // ignore empty lines
+			if (kv.empty())
+			{ continue; } // ignore empty lines
 
 			result << tabs << "\"" << kv.key << "\" \"" << get<string>(kv.val) << "\"\n";
 		}
 		else
 		{
 			if (has_whitespace(kv.key))
+			{
 				result << tabs << "\"" << kv.key << "\"";
+			}
 			else
+			{
 				result << tabs << kv.key;
+			}
 			result << "\n" << tabs << "{\n"
 			<< get<shared_ptr<VDF>>(kv.val)->serialize(depth+1)
 			<< tabs << "}\n";
